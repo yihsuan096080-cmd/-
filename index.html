@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>培養照片週報</title>
+<meta name="theme-color" content="#4ea72e">
+<meta name="description" content="上傳照片，依拍攝日期自動分週，產生週報表">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{
+  --bg:#eef6e8; --panel:#ffffff; --ink:#1c2a19; --muted:#5b6b56; --line:#cfe3c3;
+  --algae:#4ea72e; --algae-deep:#2f7a1c; --culture:#d9f2d0; --danger:#b3261e; --chip:#e3f1da;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121a10; --panel:#1b2618; --ink:#e4efdd; --muted:#9db394; --line:#2e4228;
+    --algae:#5cbc38; --algae-deep:#8fd96e; --culture:#22341d; --danger:#ff8a80; --chip:#24361f;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121a10; --panel:#1b2618; --ink:#e4efdd; --muted:#9db394; --line:#2e4228;
+  --algae:#5cbc38; --algae-deep:#8fd96e; --culture:#22341d; --danger:#ff8a80; --chip:#24361f;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei","PingFang TC","Heiti TC",system-ui,sans-serif;
+  font-size:16px;line-height:1.6}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+h1{margin:0;font-size:clamp(26px,5vw,38px);font-weight:900;letter-spacing:.02em;color:var(--algae-deep);line-height:1.15}
+h1 small{display:block;font-size:15px;font-weight:500;color:var(--muted);letter-spacing:0;margin-top:4px}
+.mode{font-size:13px;padding:4px 10px;border-radius:999px;background:var(--chip);color:var(--muted);white-space:nowrap}
+.hdr-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+h2{font-size:20px;margin:0 0 12px;font-weight:700}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:18px}
+.uploader{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}
+@media (max-width:560px){.uploader{grid-template-columns:1fr}}
+label.field{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
+input[type=text],input[type=date]{font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
+button,.btn{font:inherit;font-size:16px;font-weight:700;border:0;border-radius:12px;padding:11px 18px;cursor:pointer;background:var(--algae);color:#fff;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:46px}
+.btn.secondary,button.secondary{background:var(--chip);color:var(--ink)}
+button.danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,.btn:focus-within,input:focus-visible,.thumb:focus-visible,.week:focus-visible{outline:3px solid var(--algae-deep);outline-offset:2px}
+.btn input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.status{font-size:14px;color:var(--muted);margin-top:10px;min-height:1.6em}
+.weeks{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin}
+.week{flex:0 0 auto;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:12px;padding:8px 14px;text-align:left;font-weight:500;min-height:auto;display:block}
+.week b{display:block;font-size:16px}
+.week span{font-size:13px;color:var(--muted)}
+.week[aria-pressed="true"]{background:var(--algae);border-color:var(--algae);color:#fff}
+.week[aria-pressed="true"] span{color:#e8f7df}
+.weekhead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.weekhead h2{margin:0}
+.cat{margin-bottom:18px}
+.cat h3{display:inline-block;margin:0 0 8px;background:var(--algae);color:#fff;font-size:16px;padding:4px 14px;border-radius:10px}
+.days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+@media (max-width:760px){.days{grid-template-columns:1fr}}
+.day{background:var(--culture);border-radius:10px;padding:6px;min-height:60px}
+.day .dl{font-size:13px;font-weight:700;color:var(--algae-deep);margin-bottom:4px}
+@media (max-width:760px){.day.empty{display:none}.day .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}}
+.thumb{display:block;width:100%;padding:0;border:0;background:none;border-radius:6px;overflow:hidden;margin-bottom:6px;min-height:auto;position:relative}
+.thumb img{width:100%;display:block;aspect-ratio:3/4;object-fit:cover}
+.thumb .src{position:absolute;right:3px;bottom:3px;font-size:11px;background:rgba(0,0,0,.55);color:#fff;border-radius:4px;padding:0 4px;font-weight:500}
+.empty-state{text-align:center;color:var(--muted);padding:30px 10px}
+.opts{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:15px;margin-bottom:12px}
+.opts label{display:flex;gap:6px;align-items:center}
+.report{margin-bottom:20px}
+.report img{width:100%;height:auto;display:block;border-radius:8px;border:1px solid var(--line)}
+.report .bar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:8px 0 0;flex-wrap:wrap;font-size:14px;color:var(--muted)}
+.row-btns{display:flex;gap:10px;flex-wrap:wrap}
+dialog{border:0;border-radius:16px;padding:0;max-width:min(520px,94vw);width:100%;background:var(--panel);color:var(--ink)}
+dialog::backdrop{background:rgba(10,20,8,.6)}
+.dlg{padding:16px;display:flex;flex-direction:column;gap:12px}
+.dlg img{width:100%;max-height:50vh;object-fit:contain;border-radius:8px;background:#000}
+.dlg .row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.hint{font-size:13px;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.week,.thumb img{transition:transform .15s}.thumb:hover img{transform:scale(1.03)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>培養照片週報<small>上傳照片，自動依拍攝日期分週，一鍵產生週報表</small></h1>
+    <div class="hdr-actions"><button id="installBtn" hidden>安裝 App</button><span class="mode" id="mode">照片存在這台裝置</span></div>
+  </header>
+
+  <section class="panel" aria-labelledby="upTitle">
+    <h2 id="upTitle">上傳照片</h2>
+    <div class="uploader">
+      <label class="field">分類（例如：藻柱、三角瓶）
+        <input type="text" id="cat" list="catList" value="藻柱" autocomplete="off">
+        <datalist id="catList"></datalist>
+      </label>
+      <label class="btn" id="pickBtn">選擇照片
+        <input type="file" id="file" accept="image/*" multiple>
+      </label>
+    </div>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="wkTitle">
+    <h2 id="wkTitle">週別</h2>
+    <div class="weeks" id="weeks"></div>
+    <div id="weekView"></div>
+  </section>
+
+  <section class="panel" id="reportPanel" hidden aria-labelledby="rpTitle">
+    <div class="weekhead"><h2 id="rpTitle">週報表</h2></div>
+    <div class="opts">
+      <label><input type="checkbox" id="optWeekend"> 包含週六、週日</label>
+      <label><input type="checkbox" id="optTitle" checked> 顯示週次標題</label>
+    </div>
+    <div id="reports"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="bkTitle">
+    <h2 id="bkTitle">備份與搬移資料</h2>
+    <p class="hint" style="margin:0 0 12px">照片只存在這台裝置。換手機、清除瀏覽器資料前，或想在電腦上做報表時，先匯出備份檔，再到另一台裝置匯入。</p>
+    <div class="row-btns">
+      <button class="secondary" id="exportBtn">匯出備份</button>
+      <label class="btn secondary">匯入備份<input type="file" id="importFile" accept=".json,application/json"></label>
+    </div>
+    <div class="status" id="bkStatus" role="status" aria-live="polite"></div>
+  </section>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" class="dlg" id="dlgForm">
+    <img id="dlgImg" alt="">
+    <label class="field">拍攝日期 <input type="date" id="dlgDate" required></label>
+    <span class="hint" id="dlgSrc"></span>
+    <label class="field">分類 <input type="text" id="dlgCat" list="catList"></label>
+    <div class="row">
+      <button type="button" class="danger" id="dlgDel">刪除照片</button>
+      <button type="button" class="secondary" id="dlgCancel">取消</button>
+      <button type="button" id="dlgSave">儲存變更</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const WD = ['日','一','二','三','四','五','六'];
+let photos = [];          // {id,date,time,category,src,url,name,created}
+let selectedWeek = null;
+let store = null;
+const canUpload = true;
+
+/* ---------- date helpers ---------- */
+const pad = n => String(n).padStart(2,'0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseYmd = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+function weekStart(dateStr){ const d = parseYmd(dateStr); const off = (d.getDay()+6)%7; d.setDate(d.getDate()-off); return ymd(d); }
+function addDays(dateStr,n){ const d = parseYmd(dateStr); d.setDate(d.getDate()+n); return ymd(d); }
+function isoWeekNo(dateStr){ const d = parseYmd(dateStr); d.setDate(d.getDate()+3-((d.getDay()+6)%7)); const w1 = new Date(d.getFullYear(),0,4); return 1+Math.round(((d-w1)/864e5-3+((w1.getDay()+6)%7))/7); }
+const md = s => { const d = parseYmd(s); return `${d.getMonth()+1}/${d.getDate()}`; };
+const dayLabel = s => `${md(s)}(${WD[parseYmd(s).getDay()]})`;
+
+/* ---------- EXIF: DateTimeOriginal from JPEG ---------- */
+async function readExifDate(file){
+  try{
+    const buf = await file.slice(0, 262144).arrayBuffer();
+    const v = new DataView(buf);
+    if (v.byteLength < 4 || v.getUint16(0) !== 0xFFD8) return null;
+    let off = 2;
+    while (off < v.byteLength - 10){
+      const marker = v.getUint16(off);
+      if ((marker & 0xFF00) !== 0xFF00) break;
+      const len = v.getUint16(off+2);
+      if (marker === 0xFFE1 && v.getUint32(off+4) === 0x45786966) return parseTiff(v, off+10);
+      if (marker === 0xFFDA) break;
+      off += 2 + len;
+    }
+  }catch(e){}
+  return null;
+}
+function parseTiff(v, t){
+  const le = v.getUint16(t) === 0x4949;
+  const u16 = o => v.getUint16(o, le), u32 = o => v.getUint32(o, le);
+  const str = e => { const cnt = u32(e+4); const vo = cnt > 4 ? t + u32(e+8) : e+8; let s=''; for (let i=0;i<cnt-1;i++) s += String.fromCharCode(v.getUint8(vo+i)); return s; };
+  const scan = (ifd, cb) => { const n = u16(ifd); for (let i=0;i<n;i++){ const e = ifd+2+i*12; cb(u16(e), e); } };
+  let dt=null, exifPtr=null, orig=null, digit=null;
+  scan(t + u32(t+4), (tag,e) => { if (tag===0x0132) dt = str(e); if (tag===0x8769) exifPtr = t + u32(e+8); });
+  if (exifPtr) scan(exifPtr, (tag,e) => { if (tag===0x9003) orig = str(e); if (tag===0x9004) digit = str(e); });
+  const s = orig || digit || dt;
+  const m = s && s.match(/(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2})/);
+  return m && m[1] !== '0000' ? { date:`${m[1]}-${m[2]}-${m[3]}`, time:`${m[4]}:${m[5]}` } : null;
+}
+function dateFromName(name){
+  const m = name.match(/(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?(0[1-9]|[12]\d|3[01])(?:[-_ T]?(\d{2})(\d{2}))?/);
+  return m ? { date:`${m[1]}-${m[2]}-${m[3]}`, time: m[4] ? `${m[4]}:${m[5]}` : '' } : null;
+}
+async function detectDate(file){
+  const ex = await readExifDate(file); if (ex) return {...ex, src:'exif'};
+  const fn = dateFromName(file.name); if (fn) return {...fn, src:'name'};
+  const d = new Date(file.lastModified || Date.now());
+  return { date: ymd(d), time: `${pad(d.getHours())}:${pad(d.getMinutes())}`, src:'file' };
+}
+const SRC_TEXT = { exif:'日期取自照片 EXIF 拍攝資訊', name:'日期取自檔名', file:'找不到拍攝資訊，日期取自檔案修改時間，請確認', manual:'日期為手動設定' };
+
+/* ---------- image compression ---------- */
+async function loadBitmap(file){
+  if ('createImageBitmap' in window){ try { return await createImageBitmap(file, {imageOrientation:'from-image'}); } catch(e){} }
+  return await new Promise((res,rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
+}
+async function compress(file, max=1600){
+  const bmp = await loadBitmap(file);
+  const w = bmp.width, h = bmp.height, s = Math.min(1, max/Math.max(w,h));
+  const c = document.createElement('canvas'); c.width = Math.round(w*s); c.height = Math.round(h*s);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+}
+
+/* ---------- storage: this device (IndexedDB) ---------- */
+function localStore(){
+  const dbp = new Promise((res,rej) => {
+    const r = indexedDB.open('culture-weekly', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('photos', {keyPath:'id'});
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  let cb = () => {}; const urls = new Map();
+  const tx = async mode => (await dbp).transaction('photos', mode).objectStore('photos');
+  const req = r => new Promise((res,rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  async function refresh(){
+    const all = await req((await tx('readonly')).getAll());
+    cb(all.map(p => { if (!urls.has(p.id)) urls.set(p.id, URL.createObjectURL(p.blob)); const {blob, ...rest} = p; return {...rest, url: urls.get(p.id)}; }));
+  }
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  return {
+    subscribe(f){ cb = f; refresh().catch(() => setStatus('此瀏覽器無法儲存照片，請改用 Chrome 或 Edge')); },
+    async add(meta, blob){ await req((await tx('readwrite')).put({...meta, id: meta.id || newId(), blob, created: meta.created || Date.now()})); await refresh(); },
+    async update(id, patch){ const s = await tx('readwrite'); const p = await req(s.get(id)); Object.assign(p, patch); await req(s.put(p)); await refresh(); },
+    async remove(p){ await req((await tx('readwrite')).delete(p.id)); const u = urls.get(p.id); if (u) URL.revokeObjectURL(u); urls.delete(p.id); await refresh(); },
+    async all(){ return await req((await tx('readonly')).getAll()); },
+    async putMany(items){ const s = await tx('readwrite'); for (const it of items) s.put(it); await new Promise((res,rej) => { s.transaction.oncomplete = res; s.transaction.onerror = () => rej(s.transaction.error); }); await refresh(); },
+    async ids(){ return new Set(await req((await tx('readonly')).getAllKeys())); }
+  };
+}
+
+/* ---------- UI ---------- */
+function setStatus(t){ $('status').textContent = t; }
+
+function onData(list){
+  photos = list.sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time) || (a.created||0)-(b.created||0));
+  const cats = [...new Set(photos.map(p => p.category))];
+  $('catList').innerHTML = cats.map(c => `<option value="${esc(c)}">`).join('');
+  const weeks = weekKeys();
+  if (!selectedWeek || !weeks.includes(selectedWeek)) selectedWeek = weeks[0] || null;
+  renderWeeks(); renderWeek();
+  if (!$('reportPanel').hidden) renderReports();
+}
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function weekKeys(){ return [...new Set(photos.map(p => weekStart(p.date)))].sort().reverse(); }
+
+function renderWeeks(){
+  const el = $('weeks'); el.innerHTML = '';
+  const keys = weekKeys();
+  if (!keys.length){ el.innerHTML = ''; return; }
+  keys.forEach(k => {
+    const n = photos.filter(p => weekStart(p.date) === k).length;
+    const b = document.createElement('button');
+    b.className = 'week'; b.setAttribute('aria-pressed', k === selectedWeek);
+    b.innerHTML = `<b>${md(k)} – ${md(addDays(k,6))}</b><span>${parseYmd(k).getFullYear()} 第${isoWeekNo(k)}週 · ${n} 張</span>`;
+    b.onclick = () => { selectedWeek = k; renderWeeks(); renderWeek(); if (!$('reportPanel').hidden) renderReports(); };
+    el.appendChild(b);
+  });
+}
+
+function renderWeek(){
+  const v = $('weekView');
+  if (!selectedWeek){ v.innerHTML = `<div class="empty-state">還沒有照片。選擇分類後上傳照片，系統會依拍攝日期自動歸到對應的週。</div>`; $('reportPanel').hidden = true; return; }
+  const wp = photos.filter(p => weekStart(p.date) === selectedWeek);
+  const cats = [...new Set(wp.map(p => p.category))];
+  v.innerHTML = `<div class="weekhead" style="margin-top:14px"><h2>${md(selectedWeek)} – ${md(addDays(selectedWeek,6))}</h2>
+    <button id="genBtn">產生週報表</button></div>`;
+  cats.forEach(c => {
+    const box = document.createElement('div'); box.className = 'cat';
+    box.innerHTML = `<h3>${esc(c)}</h3>`;
+    const days = document.createElement('div'); days.className = 'days';
+    for (let i=0;i<7;i++){
+      const ds = addDays(selectedWeek, i);
+      const dp = wp.filter(p => p.category === c && p.date === ds);
+      const d = document.createElement('div'); d.className = 'day' + (dp.length ? '' : ' empty');
+      d.innerHTML = `<div class="dl">${dayLabel(ds)}</div>`;
+      const g = document.createElement('div'); g.className = 'grid';
+      dp.forEach(p => {
+        const t = document.createElement('button'); t.className = 'thumb';
+        t.setAttribute('aria-label', `${dayLabel(ds)} ${p.time||''} 的照片，點選編輯`);
+        t.innerHTML = `<img src="${p.url}" alt="" loading="lazy">${p.time ? `<span class="src">${p.time}</span>` : ''}`;
+        t.onclick = () => openDialog(p);
+        g.appendChild(t);
+      });
+      d.appendChild(g); days.appendChild(d);
+    }
+    box.appendChild(days); v.appendChild(box);
+  });
+  $('genBtn').onclick = () => { $('reportPanel').hidden = false; renderReports(); $('reportPanel').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto':'smooth'}); };
+}
+
+/* ---------- edit dialog ---------- */
+let editing = null;
+function openDialog(p){
+  editing = p;
+  $('dlgImg').src = p.url; $('dlgDate').value = p.date; $('dlgCat').value = p.category;
+  $('dlgSrc').textContent = SRC_TEXT[p.src] || '';
+  $('dlgDel').hidden = $('dlgSave').disabled = !canUpload; $('dlgDate').disabled = $('dlgCat').disabled = !canUpload;
+  $('dlg').showModal();
+}
+$('dlgCancel').onclick = () => $('dlg').close();
+$('dlgSave').onclick = async () => {
+  const date = $('dlgDate').value, category = $('dlgCat').value.trim() || '未分類';
+  if (!date) return;
+  const patch = { category };
+  if (date !== editing.date){ patch.date = date; patch.src = 'manual'; }
+  $('dlg').close();
+  try { await store.update(editing.id, patch); } catch(e){ setStatus('儲存失敗：' + (e.message||e.code)); }
+};
+$('dlgDel').onclick = async () => {
+  if (!confirm('確定刪除這張照片？刪除後無法復原。')) return;
+  $('dlg').close();
+  try { await store.remove(editing); setStatus('已刪除 1 張照片'); } catch(e){ setStatus('刪除失敗：' + (e.message||e.code)); }
+};
+
+/* ---------- upload ---------- */
+$('file').addEventListener('change', async e => {
+  const files = [...e.target.files]; e.target.value = '';
+  if (!files.length || !store) return;
+  const category = $('cat').value.trim() || '未分類';
+  let ok = 0, unsure = 0, lastDate = null;
+  for (const [i,f] of files.entries()){
+    setStatus(`上傳中 ${i+1} / ${files.length}…`);
+    try{
+      const d = await detectDate(f);
+      if (d.src !== 'exif') unsure++;
+      const blob = await compress(f);
+      await store.add({ date:d.date, time:d.time, src:d.src, category, name:f.name }, blob);
+      ok++; lastDate = d.date;
+    }catch(err){ console.error(err); }
+  }
+  if (lastDate) selectedWeek = weekStart(lastDate);
+  setStatus(`已上傳 ${ok} 張` + (ok < files.length ? `，${files.length-ok} 張無法讀取（請改用 JPG/PNG）` : '') + (unsure ? `。其中 ${unsure} 張沒有拍攝資訊，請點照片確認日期。` : '。'));
+  renderWeeks(); renderWeek();
+});
+
+/* ---------- report rendering (canvas) ---------- */
+const imgCache = new Map();
+function loadImg(url){
+  if (!imgCache.has(url)) imgCache.set(url, new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = url; }));
+  return imgCache.get(url);
+}
+function rrect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function fitText(ctx, text, maxW, size, weight){
+  let s = size; do { ctx.font = `${weight} ${s}px "Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei",sans-serif`; s -= 1; } while (ctx.measureText(text).width > maxW && s > 12);
+}
+async function drawReport(category, weekKey, opts){
+  const W = 1600, BASE_H = 900;
+  let days = [0,1,2,3,4].map(i => addDays(weekKey,i));
+  if (opts.weekend) days = [0,1,2,3,4,5,6].map(i => addDays(weekKey,i));
+  const cols = days.map(ds => photos.filter(p => p.category === category && p.date === ds));
+  const imgs = await Promise.all(cols.map(c => Promise.all(c.map(p => loadImg(p.url)))));
+
+  const left = 250, right = 24, top = opts.title ? 70 : 50, headH = 56, gap = 18, vgap = 14;
+  const colW = (W - left - right - gap*(days.length-1)) / days.length;
+  const imgW = colW - 16;
+  const colH = imgs.map(col => col.reduce((s,im) => s + (im ? imgW*im.height/im.width : 0) + vgap, 0) - (col.length ? vgap : 0));
+  const need = Math.max(0, ...colH);
+  const yStart = top + headH + 14;
+  let avail = BASE_H - yStart - 28, scale = 1, H = BASE_H;
+  if (need > avail){ scale = Math.max(0.55, avail/need); if (need*scale > avail) H = Math.ceil(yStart + need*scale + 28); }
+
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#d9f2d0'; ctx.fillRect(0,0,W,H);
+  const green = '#4ea72e', edge = '#3a8a22';
+
+  if (opts.title){
+    ctx.fillStyle = '#2f5a24'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    ctx.font = '500 22px "Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei",sans-serif';
+    ctx.fillText(`${parseYmd(weekKey).getFullYear()} 第${isoWeekNo(weekKey)}週　${md(days[0])} – ${md(days[days.length-1])}`, W - right, 32);
+  }
+  // category box
+  rrect(ctx, 20, top - 6, 210, 108, 22); ctx.fillStyle = green; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = edge; ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  fitText(ctx, category, 180, 32, 700); ctx.fillText(category, 125, top + 48);
+
+  days.forEach((ds, i) => {
+    const x = left + i*(colW+gap);
+    rrect(ctx, x, top, colW, headH, 10); ctx.fillStyle = green; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = edge; ctx.stroke();
+    ctx.fillStyle = '#fff'; fitText(ctx, dayLabel(ds), colW - 16, 30, 500); ctx.fillText(dayLabel(ds), x + colW/2, top + headH/2 + 1);
+    let y = yStart; const w = imgW*scale, ix = x + (colW - w)/2;
+    imgs[i].forEach(im => {
+      if (!im) return;
+      const h = w*im.height/im.width;
+      ctx.drawImage(im, ix, y, w, h); y += h + vgap*scale;
+    });
+  });
+  return c;
+}
+
+async function renderReports(){
+  const box = $('reports');
+  if (!selectedWeek){ box.innerHTML = ''; return; }
+  const opts = { weekend: $('optWeekend').checked, title: $('optTitle').checked };
+  const cats = [...new Set(photos.filter(p => weekStart(p.date) === selectedWeek).map(p => p.category))];
+  box.innerHTML = '<div class="hint">產生中…</div>';
+  const frag = document.createDocumentFragment();
+  for (const cat of cats){
+    const canvas = await drawReport(cat, selectedWeek, opts);
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    const url = URL.createObjectURL(blob);
+    const fname = `週報_${cat}_${selectedWeek}.png`;
+    const wrap = document.createElement('div'); wrap.className = 'report';
+    wrap.innerHTML = `<img src="${url}" alt="${esc(cat)} ${md(selectedWeek)} 當週照片週報表">
+      <div class="bar"><span>手機可長按圖片儲存，或按「分享」傳到 LINE、雲端硬碟。</span></div>`;
+    const btn = document.createElement('button'); btn.textContent = '下載 PNG';
+    btn.onclick = () => saveFile(fname, blob, url);
+    const btns = document.createElement('div'); btns.className = 'row-btns';
+    if (canShareFiles){ const sb = document.createElement('button'); sb.className = 'secondary'; sb.textContent = '分享'; sb.onclick = () => shareFile(fname, blob); btns.appendChild(sb); }
+    btns.appendChild(btn);
+    wrap.querySelector('.bar').appendChild(btns);
+    frag.appendChild(wrap);
+  }
+  box.innerHTML = ''; box.appendChild(frag);
+}
+function saveFile(name, blob, url){
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+async function shareFile(name, blob){
+  const file = new File([blob], name, {type: blob.type});
+  try { await navigator.share({ files:[file], title: name }); } catch(e){ /* 使用者取消分享 */ }
+}
+const canShareFiles = (() => { try { return !!(navigator.canShare && navigator.canShare({files:[new File([''], 'a.png', {type:'image/png'})]})); } catch(e){ return false; } })();
+$('optWeekend').onchange = renderReports;
+$('optTitle').onchange = renderReports;
+
+/* ---------- backup ---------- */
+const blobToDataURL = b => new Promise((res,rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
+$('exportBtn').onclick = async () => {
+  const bk = $('bkStatus'); const all = await store.all();
+  if (!all.length){ bk.textContent = '目前沒有照片可以匯出。'; return; }
+  const parts = ['{"app":"culture-weekly","version":1,"photos":['];
+  for (const [i,p] of all.entries()){
+    bk.textContent = `整理中 ${i+1} / ${all.length}…`;
+    const {blob, ...meta} = p;
+    parts.push((i ? ',' : '') + JSON.stringify({...meta, data: await blobToDataURL(blob)}));
+  }
+  parts.push(']}');
+  const file = new Blob(parts, {type:'application/json'});
+  const name = `照片週報備份_${ymd(new Date())}.json`;
+  const url = URL.createObjectURL(file);
+  if (canShareFiles && /Android/i.test(navigator.userAgent)) await shareFile(name, file); else saveFile(name, file, url);
+  bk.textContent = `已匯出 ${all.length} 張照片（${(file.size/1048576).toFixed(1)} MB）。`;
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+};
+$('importFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const bk = $('bkStatus'); bk.textContent = '讀取備份中…';
+  try{
+    const data = JSON.parse(await f.text());
+    if (data.app !== 'culture-weekly' || !Array.isArray(data.photos)) throw new Error('不是本 App 的備份檔');
+    const have = await store.ids(); const items = [];
+    for (const p of data.photos){
+      if (have.has(p.id)) continue;
+      const {data: du, ...meta} = p;
+      items.push({...meta, blob: await (await fetch(du)).blob()});
+    }
+    await store.putMany(items);
+    bk.textContent = `已匯入 ${items.length} 張照片` + (data.photos.length - items.length ? `，略過 ${data.photos.length - items.length} 張已存在的照片。` : '。');
+  }catch(err){ bk.textContent = '匯入失敗：' + err.message; }
+});
+
+/* ---------- install & offline ---------- */
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; $('installBtn').hidden = false; });
+$('installBtn').onclick = async () => { if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; $('installBtn').hidden = true; };
+window.addEventListener('appinstalled', () => { $('installBtn').hidden = true; });
+if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+
+/* ---------- boot ---------- */
+async function boot(){
+  renderWeek();
+  if (navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch(e){} }
+  store = localStore();
+  store.subscribe(onData);
+}
+boot();
+})();
+</script>
+</body>
+</html>
